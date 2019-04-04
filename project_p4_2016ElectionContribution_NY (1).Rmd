@@ -1,0 +1,2292 @@
+---
+title: "Analysis_2016_Presidential_Campaign_Contribution _NY_Data Exploration.rmd"
+author: "Moh.A.T.Elgaser"
+date: "31/01/2019"
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r libraries,echo=FALSE,include = FALSE}
+library('ggplot2')
+library('grid')
+library('carData')
+library('gridExtra')
+library('states')
+library('base')
+library('plyr')
+library('dplyr')
+library('reshape2')
+library('GGally')
+library('ggthemes') 
+library('scales')
+library('memisc')
+library('RColorBrewer')
+library('bitops')
+library('RCurl')
+library('knitr')
+library('Hmisc')
+library('vcd')
+```
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+_**Explore data for New York city  (New York  city)**_
+```{r loaddata}
+
+# Load Dataset into Workspace.
+
+# ny = read.csv('P00000001-ny.csv')
+
+# When loading CSV file, I got an error of "Error in read.csv : duplicate 'row.names' are not allowed".  After doing some research and this blog post at StackOverflow, I found the solution by adding a "," to the end of the header line.  This however, added an additional column. 
+# function to overcome the problem that number of header fields less than number of columns below the header row.
+
+myread <- function(file, sep = ",", ...){
+    nm <- readLines(file, n = 1)
+    nm <- unlist(strsplit(nm, sep))
+    DF <- read.table(file, skip = 1, sep = sep, ...)
+    if(length(names(DF)) > length(nm)){
+        names(DF)[(length(names(DF)) - length(nm) + 1):length(names(DF))] <- nm
+    } else names(DF) <- nm
+    DF
+}
+
+ny <- myread("P00000001-NY.csv", sep = ",")
+
+
+head(ny,3)
+
+
+```
+
+_**TO rename columns name**_ 
+
+```{r }
+colnames(ny) <- c('cmte_id','cand_id','cand_nm','contbr_nm','contbr_city','contbr_st','contbr_zip','contbr_employer','contbr_occupation','contb_receipt_amt','contb_receipt_dt','receipt_desc','memo_cd','memo_text','form_tp=ny','file_num','tran_id=ny','election_tp','v1')
+
+head(ny,3)
+
+```
+
+_**what v1 column have?**_
+```{r}
+levels(ny$v1)
+```
+
+_**TO REMVE column v1 where all values NA values**_
+```{r}
+ny= subset(ny,select = (-v1))
+head(ny,3)
+```
+_**what are the mean of the abbreviation's in  NY data set ?**_
+```{r}
+# CMTE_ID ------>			COMMITTEE ID				
+# CAND_ID	------>		  CANDIDATE ID			
+# CAND_NM	------>		  CANDIDATE NAME
+# contbr_nm ------>   Contributor/Lender/Transfer Name: Contributor Name  
+# contbr_city------>  City/Town: Contributor City  
+# contbr_st ------>   State: Contributor State  
+# contbr_zip ------>  Zip Code: Contributor Zip Code  
+# contbr_employer --->Employer: Contributor's Employer   
+# contbr_occupation-->Occupation: Contributor's Occupation  
+# contb_receipt_amt-->Transaction Amount:    
+# contb_receipt_dt--->Transaction Date(MMDDYYYY):  
+# RECIPIENT_NM------>	RECIPIENT NAME			
+# DISB_AMT ------>		DISBURSEMENT AMOUNT		
+# DISB_DT------>      DISBURSEMENT DATE			
+# RECIPIENT_CITY---->	RECIPIENT CITY				
+# RECIPIENT_ST------>	RECIPIENT STATE				
+# RECIPIENT_ZIP------>RECIPIENT ZIPE CODE			
+# DISB_DESC------>    DISBURSEMENT DESCRIPTION		
+# MEMO_CD------>      MEMO CODE 'X' indicates that the amount is NOT to be                                      included in the itemization total. 
+# MEMO_TEXT------>    MEMO TEXT	 A description of the activity. Memo Text is available on itemized amounts on Schedules A and B. These transactions are included in the itemization total                      .   			
+# FORM_TP------>      FEC FORM TYPE				
+# FILE_NUM------>     FILE NUMBER	or  Report ID is Unique report id 			
+# TRAN_ID------>      TRANSACTION ID	ONLY VALID FOR ELECTRONIC FILINGS. A unique identifier associated with each itemization or transaction appearing in an FEC electronic file. A transaction ID is unique for a specific committee for a specific report. In other words, if committee, C1, files a Q3 New with transaction SA123 and then files 3 amendments to the Q3 transaction SA123 will be identified.                                                 
+                          
+#ELECTION_TP------>    This code indicates the election for which the contribution was made. EYYYY (election Primary, General,Other plus election year)                                                        
+```
+
+**_This is a report on data exploration with a dataset of 2016 presidential campaign contribution data for NEW YORK state.The dataset contains  649460 observation and 18 variables_**
+
+_***what NY data looks?***_
+```{r head_tail ,echo=FALSE}
+ head(ny, 3)
+ tail(ny, 3)
+
+```
+
+
+***what the structure of NY data set?***
+```{r str ,echo=FALSE}
+str(ny)
+
+```
+
+***Here is the summary of the dataset:***
+```{r summary ,echo=FALSE}
+summary(ny)
+```
+
+##***_NOTE_***
+
+1-***_Is`cmte_id` designated especially for each election candidate  `cand_nm`/`cand_id`since`cmte_id`,`cand_id`and`cand_nm` has the same counts?  _***
+
+2-***_`contb_receipt_amt` shows a negative value - Why is that? _*** 
+
+3-***_How far back do contributions start coming in? _*** 
+
+4-***_Is there any trend over time? _***
+
+5-***_What cities did the contributions came from? _***
+
+6-***_What party's candidates get more contributions? _*** 
+
+7-***_Which candidates received highest amount and counts of contribution in        NEW YORK? _***  
+
+***_From data structure and data sammary we going to answer some questions to under stand data set using different types of visualizition _***
+
+
+## **_Univariate Plots_**
+
+__
+
+***_1-How many  COMMITTEE id -`cmte_id` Data set have? _***
+```{r summary_cmte_id ,echo=FALSE}
+
+length(unique(ny$cmte_id))
+
+```
+
+***_2-what Is the ranking of COMMITTEEs according to number of contributions_***
+```{r ,echo=FALSE}
+sort(summary(ny$cmte_id),decreasing = T)
+```
+***plotting show ranking of COMMITTEEs according to number of contributions***
+```{r ggplot_cmte_id ,echo=FALSE}
+
+ny_arrange <- within(ny,cmte_id <- factor(cmte_id,                                         levels=names(sort(table(cmte_id),decreasing=TRUE))))
+## plot
+ny_cmte_id <- ggplot(aes(x = cmte_id), data = ny_arrange )+
+  geom_bar( color = I('black'),fill = I('#F79420'))+
+  labs(title = c('Contribution Count'),
+      x = c("COMMITTEE id"),
+      y = c('Contribution Count')) +
+  theme(text = element_text(size = 10),
+       strip.text = element_text(size = 10),
+        title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        legend.text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+ny_cmte_id
+
+```
+
+***we are going to use log10 to to make skewed more clear*** 
+```{r ,echo=FALSE}
+ny_cmte_id_log10 <-ggplot(aes(x = cmte_id), data = ny_arrange )+
+  geom_bar( color = I('black'),fill = I('#099009'))+
+  scale_y_log10()+
+  labs(title = c('Log10(Contribution Count) by COMMITTEE id'),
+       x = c("COMMITTEE id"),
+       y = c('Log10(Contribution Count)')) +
+   theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10),
+        title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        legend.text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ny_cmte_id_log10 
+```
+
+#### **_Observations_**
+it is clear  most contributions occur for specific committees specially
+
+***C00575795  399522, C00577130 174564 ,C00580100 36931,C00574624,16785***
+
+*by searching for this committees*
+
+> 1.C00575795 is HILLARY FOR AMERICA - PRINCIPAL CAMPAIGN COMMITTEE OF HILLARY*<br>
+
+>2.C00575795 is BERNIE 2016 PRINCIPAL CAMPAIGN COMMITTEE OF BERNIE*<br>
+
+>3.C00580100 is DONALD J. TRUMP FOR PRESIDENT, INC PRINCIPAL CAMPAIGN COMMITTEE OF TRUMP*<br>>
+4.C00574624 is CRUZ FOR PRESIDENT  P - PRINCIPAL CAMPAIGN COMMITTEE OF CRUZ*<br>
+
+___
+
+
+***_1-from the summary `cand_id` and `cand_nm` has the same level counts._*** 
+
+### Candidate Name `cand_nm` 
+
+
+***How many candidates are compite in  presidential election's ?***
+```{r Number_of_presidential_election_candidates ,echo=FALSE}
+
+print(length(unique(ny$cand_nm)))
+```
+
+***what are presidential election's candidates names ?***
+```{r candidates_names ,echo=FALSE}
+unique(ny$cand_nm)
+```
+
+
+
+
+***How many contributions are  for every presidential election's candidates in data set ?***
+```{r number_of_observesions_for_each_candidate ,echo=FALSE}
+
+sort(summary(ny$cand_nm),decreasing = T)
+# table(ny$cand_nm)
+```
+
+
+### plotting of contributions for every presidential election's candidates
+
+```{r qplot_cand_nm ,echo=FALSE}
+
+ny_cand_nm_arrange <- within(ny,cand_nm <- factor(cand_nm,                                         levels=names(sort(table(cand_nm),decreasing=TRUE))))
+## plot
+ny_cand_nm <- qplot(x = cand_nm, data = ny_cand_nm_arrange)+
+  geom_bar( color = I('black'),fill = I('#099DD9'))+
+  labs(title = c('Contribution Count'),
+      x = c("Candidate name"),
+      y = c('Contribution Count')) +
+  theme(text = element_text(size = 7),
+       strip.text = element_text(size = 7),
+        title = element_text(size = 7),
+        axis.text = element_text(size = 7),
+        legend.text = element_text(size = 7), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+Transform y scale to make skewed data close to normal
+```{r log(10)plot ,echo=FALSE}
+
+ny_cand_nm_log <- qplot(x = cand_nm, data = ny_cand_nm_arrange )+
+  geom_bar( color = I('black'),fill = I('#F79420'))+
+  scale_y_log10()+
+  labs(title = c('Log10 Contribution Count'),
+      x = c("Candidate name "),
+      y = c('Log10 Contribution Count ')) +
+  theme(text = element_text(size = 7),
+       strip.text = element_text(size = 7),
+        title = element_text(size = 7),
+        axis.text = element_text(size = 7),
+        legend.text = element_text(size = 7), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+grid.arrange(ny_cand_nm,ny_cand_nm_log,ncol=2)
+```
+
+
+***How we can clasifiy count of contributions and proportion for every presidential election's candidates ?***
+
+```{r ny.count_by_cand_nm ,echo=FALSE}
+
+ny.count_by_cand_nm <- ny %>%
+  group_by(cand_nm) %>%
+  summarise(n=n()) %>%
+  mutate(proportion = n / sum(n)) %>%
+  arrange(desc(n)) 
+
+print(ny.count_by_cand_nm)
+
+```
+***we are going to clasifiy the into 4 groups:***<br>
+-->*less than 1000 contribution*<br>
+-->*more than 1000 and less than or equal to 10000*<br>
+-->*more than 10000and less than or equal to 100000*<br>
+-->*more than 100000*<br>
+
+```{r ggplot_cand_nm_log10_level ,echo=FALSE}
+
+ggp_less_1k <- ggplot(aes(x = reorder(cand_nm, -n), y = n), data = subset(ny.count_by_cand_nm, n <= 1000)) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#099DD9')) + 
+  scale_y_log10() +
+  xlab('Candidate Name of less_1k ') +
+  ylab('Log10(Contribution Count)') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggp_less_10k <- ggplot(aes(x = reorder(cand_nm, -n), y = n), data = subset(ny.count_by_cand_nm, n>1000 &n <= 10000)) +
+  geom_bar(stat="identity",color = I('black'),fill = 'green')+ 
+  scale_y_log10() +
+  xlab('Candidate Name of less_10k') +
+  ylab('') +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+
+ggp_less_100k <- ggplot(aes(x = reorder(cand_nm, -n), y = n), data = subset(ny.count_by_cand_nm, n > 10000 & n <=100000)) +
+  geom_bar(stat="identity",color = I('black'),fill = 'red')+ 
+  scale_y_log10() +                                 
+  xlab('Candidate Name of less_100k') +
+  ylab('') +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+
+ggp_more_100k <- ggplot(aes(x = reorder(cand_nm, -n), y = n), data = subset(ny.count_by_cand_nm, n > 100000)) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#F79420')) + 
+  scale_y_log10() +
+  xlab('Candidate Name of more_100k ') +
+  ylab('') +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+grid.arrange(ggp_less_1k, ggp_less_10k, ggp_less_100k,ggp_more_100k, ncol=2)
+```
+
+***_What are ranking of count contributions proportion according to presidential election's candidates_***
+  
+```{r gpp_proportion_log10 ,echo=FALSE}
+
+gpp_proportion_log10 <- ggplot(aes(x = reorder(cand_nm, -proportion), 
+                               y = proportion),
+                           data = ny.count_by_cand_nm) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#099DD9')) +
+  scale_y_log10() +  
+  xlab('Candidate Name') +
+  ylab('proportion Contribution Count') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+gpp_proportion_log10
+```
+
+***_classifiying proportion of contributions for every presidential election's candidates ?_***
+
+```{r,echo=FALSE}
+
+# plotting
+ggpp_less_1k <- ggplot(aes(x = reorder(cand_nm, proportion), y = proportion), data = subset(ny.count_by_cand_nm, n <= 1000)) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#099DD9')) + 
+  xlab('Candidate Name of less_1k ') +
+  ylab('proportion Contribution Count') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggpp_less_10k <- ggplot(aes(x = reorder(cand_nm, proportion), y = proportion), data = subset(ny.count_by_cand_nm, n>1000 &n <= 10000)) +
+  geom_bar(stat="identity",color = I('black'),fill = 'green')+ 
+   xlab('Candidate Name of less_10k') +
+  ylab('') +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+
+ggpp_less_100k <- ggplot(aes(x = reorder(cand_nm, proportion), y = proportion), data = subset(ny.count_by_cand_nm, n > 10000 & n <=100000)) +
+  geom_bar(stat="identity",color = I('black'),fill = 'red')+ 
+  xlab('Candidate Name of less_100k') +
+  ylab('') +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+
+ggpp_more_100k <- ggplot(aes(x = reorder(cand_nm, proportion), y = proportion), data = subset(ny.count_by_cand_nm, n > 100000)) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#F79420')) + 
+  xlab('Candidate Name of more_100k ') +
+  ylab('') +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+grid.arrange(ggpp_less_1k, ggpp_less_10k, ggpp_less_100k,ggpp_more_100k, ncol=2)
+
+```
+
+#### **Observations**
+
+There are 25 distinct candidates.  We see the counts of contribution transactions received by 25 candidates varies dramatically.<br>
+The plots show that:<br>
+
+ candidates have more than 100,000 contributions<br>
+  --> Clinton, Hillary Rodham   399522<br>
+  --> Sanders, Bernard          174564<br>
+  
+  candidates have less than 10000 contributions<br>
+  --> Trump, Donald J.            36931 <br>
+  --> Cruz, Rafael Edward 'Ted'   16785 <br>
+  
+  --> 7  candidates have less than 10000 contributions<br>
+  --> 14  candidates have less than 1000 contributions<br>
+
+___
+
+### Contributor Name `contbr_nm`
+***_How many contributer NY data set have ?_***
+
+```{r summary_contbr_nm ,echo=FALSE}
+length(unique(ny$contbr_nm))
+# for more details we can use this code line 
+# summary(ny$contbr_nm)
+
+```
+There are 119407 distinict contributors, by names.
+
+
+***_what are ranking of contributions amount by contributers in NY state _***
+```{r contributer_in_NY_state,echo=FALSE}
+ny.contbr_nm <- ny %>%
+  group_by(contbr_nm) %>%
+  summarise(contbr_nm.rank= sum(contb_receipt_amt),
+            count_of_contrib =n()) %>%
+  mutate(proportion = contbr_nm.rank/ sum(contbr_nm.rank)) %>%
+  arrange(desc(contbr_nm.rank))
+
+ny.contbr_nm 
+```
+***_Ranking of top 20 contributers according to contribution amount in NY .state_***
+
+```{r rank_of_20_contributer,echo=FALSE}
+
+ggplot(ny.contbr_nm[1:20,],
+       aes(x = reorder(contbr_nm, -proportion), 
+           y = proportion)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = 'green') +
+  scale_y_sqrt()+
+  labs(title = c("Contribution amount proportion by Contributor"),
+       x = c("Contributor name"),
+       y = c('Proportion')) +
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10),
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+#### **Observations**
+
+>There are 119407 distint contributors HILLARY VICTORY FUND - UNITEMIZED dramatically contribute by almost 47% of total contributions in New York state
+
+___
+
+
+***_what are the Contributions by party  ?_***
+
+```{r cand_party ,echo=FALSE}
+# add column to our data for candidate party
+
+# add column to our data for candidate party
+
+rep <- c('Trump, Donald J.', "Santorum, Richard J.", "Cruz, Rafael Edward 'Ted'", "Walker, Scott", 'Bush, Jeb', "Rubio, Marco", "Kasich, John R.", 'Christie, Christopher J.', "Paul, Rand", 'Carson, Benjamin S.', "Fiorina, Carly", "Jindal, Bobby", "Huckabee, Mike", "Graham, Lindsey O.", "Pataki, George E.", "Perry, James R. (Rick)", "Gilmore, James S III")
+lib <- c("Johnson, Gary")
+gre <- c("Stein, Jill")
+ind <- c("McMullin, Evan")
+dem <- c("Clinton, Hillary Rodham", "Sanders, Bernard", "O'Malley, Martin Joseph", "Webb, James Henry Jr.", "Lessig, Lawrence")
+polParty <- function(x) {
+    if(is.na(x)){
+      NA
+    }else if(x %in% rep ){
+      "Republican"
+    }else if(x %in% dem){
+      "Democratic"
+    }else if(x %in% gre){
+      "Green"
+    }else if(x %in% ind){
+      "Independent"
+    }else if(x %in% lib){
+      "Libertarian"
+    }else{
+      NA
+    }
+}
+
+ny$cand_party <- factor(apply(ny['cand_nm'], 1, polParty))
+
+sort(summary(ny$cand_party),decreasing = T)
+```
+
+***_plotting the distribution of Contributions by party_***
+```{r qplot for cand_party,echo=FALSE}
+
+ny_cand_party_arrange <- within(ny,cand_party<- factor(cand_party,                                                       levels=names(sort(table(cand_party),decreasing=TRUE))))
+
+ny_cand_party <- qplot(x = cand_party, data = ny_cand_party_arrange) +
+  geom_bar(color = I('black'),fill = I('#F79420'))+
+  labs(title = c('Contribution Count'), x = c("Political Party"), y = c('Contribution Count')) +
+  theme(text = element_text(size = 10), strip.text = element_text(size = 10), title = element_text(size = 10), axis.text = element_text(size = 10), legend.text = element_text(size = 14),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ny_cand_party_log10 <-qplot(x = cand_party, data = ny_cand_party_arrange) +
+  geom_bar(color = I('black'),fill = I('#099DD9'))+
+  scale_y_log10() +
+  labs(title = c('Log10(Contribution Count) by Party'), x = c("Political Party"), y = c('Log10(Contribution Count)')) +
+  theme(text = element_text(size = 10), strip.text = element_text(size = 10), title = element_text(size = 10), axis.text = element_text(size = 10), legend.text = element_text(size = 14),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+grid.arrange(ny_cand_party,ny_cand_party_log10 ,ncol=2)
+```
+
+
+***_what is the proportion of Contribution count by cand_party  ?_***
+
+```{r proportion_of_contribution _ount_by_cand_party,echo=FALSE}
+
+ny.count_by_cand_party <- ny %>%
+  group_by(cand_party) %>%
+  summarise(n=n()) %>%
+  mutate(proportion = n / sum(n)) %>%
+  arrange(desc(n)) 
+
+print(ny.count_by_cand_party)
+
+```
+
+***_plotting of proportion of Contribution count by cand_party_***
+
+```{r qplot_ofproportion_sqrt_of_contribution_count_by_cand_party,echo=FALSE}
+
+
+gpp_proportion_sqrt <- ggplot(aes(x = reorder(cand_party, -proportion),
+                               y = proportion),
+                           data = ny.count_by_cand_party) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#F79420')) +
+  scale_y_sqrt()+
+  xlab('Political Party') +
+  ylab('proportion Contribution Count') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 10), strip.text = element_text(size = 10), title = element_text(size = 10), axis.text = element_text(size = 10), legend.text = element_text(size = 10),  axis.text.x = element_text(angle = 90, hjust = 1))
+gpp_proportion_sqrt 
+```
+
+#### **Observations**
+
+>We see the counts of contribution transactions received by parties vary dramatically proportional count number of contributions for  Democratic party more than all other parties contributions
+
+___
+***_what are the proportion of contributions count by every unique Contributors ? `_***
+
+```{r proportion_of_contributions_by_every_Contributors,echo=FALSE}
+
+ny.contbr_nm <- ny %>%
+  group_by(contbr_nm) %>%
+  summarise(n=n()) %>%
+  mutate(proportion = n / sum(n)) %>%
+  arrange(desc(n)) 
+
+ny.contbr_nm 
+
+```
+
+>since number of contributors are 119407 so we will analysise it in more details later
+
+___
+
+### Contribution Receipt Date, `contb_receipt_dt` 
+
+***_What Contribution Receipt Date data look ?_***
+
+```{r summary_contb_receipt_dt ,echo=FALSE}
+sort(summary(ny$contb_receipt_dt),decreasing = T)
+```
+
+
+Since dates are in factor type and in format that is inconvenient for analysis. so we are going to break it down <br>
+`contb_receipt_day<br>`
+`contb_receipt_month`<br>`
+`contb_receipt_month_name`<br>`
+`contb_receipt_year`.<br>`
+
+
+```{r add date columns to NY data set,echo=FALSE}
+
+
+# add column for day
+
+ny$contb_receipt_day <- factor(substr(ny$contb_receipt_dt, 
+                                      start = 1, stop = 2))
+
+# add 20 to the year and add column for year
+ny$contb_receipt_year <- factor(paste("20", substr(ny$contb_receipt_dt,
+                                                   start = 8, stop = 9),
+                                      sep = ""))
+
+# add column for month
+ny$contb_receipt_month_name <- factor(substr(ny$contb_receipt_dt, 
+                                             start = 4, stop = 6))
+
+# convert of month from month name in to month number
+unique(ny$contb_receipt_month_name)
+ny$contb_receipt_month <- factor(match(paste(toupper(substring(tolower(ny$contb_receipt_month_name), 1, 1)), substring(tolower(ny$contb_receipt_month_name), 2), sep = ""), month.abb))
+
+
+# to confirm the transformation of month name into month number
+sort(unique(ny$contb_receipt_month))
+
+```
+
+
+***_A quick plot below shows the trends of daily contribution transaction count, over different months of the year_***
+
+```{r ggplot_contb_receipt_daily_by_month,echo=FALSE}
+
+ggplot(data = ny, aes(x = contb_receipt_day)) +
+  geom_bar(fill = I('#F79420'),color = I('black')) + 
+  facet_wrap(~contb_receipt_month, ncol = 2) +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+***_What is the trend of of contribution through different years ?_***
+
+```{r,echo=FALSE}
+summary(ny$contb_receipt_year)
+```
+
+***_plotting of contributions over different years in NY data set?_***
+
+```{r,echo=FALSE}
+
+ ggp2013 <- ggplot(data = ny[ny$contb_receipt_year %in% factor(c(2013)), ], aes(x = contb_receipt_month)) +
+  geom_bar(color = I('black'),fill = 'green') + 
+  scale_x_discrete(limits = factor(seq(1,12,1)))
+  
+
+ 
+ggp2014 <- ggplot(data = ny[ny$contb_receipt_year %in% factor(c(2014)), ], aes(x = contb_receipt_month)) + 
+   geom_bar(color = I('black'),fill = 'red') + 
+   scale_x_discrete(limits = factor(seq(1,12,1)))
+ 
+ 
+ggp2015 <- ggplot(data = ny[ny$contb_receipt_year %in% factor(c(2015)), ], aes(x = contb_receipt_month)) + 
+   geom_bar(color = I('black'),fill = 'yellow') + 
+   scale_x_discrete(limits = factor(seq(1,12,1)))
+
+ 
+ggp2016 <- ggplot(data = ny[ny$contb_receipt_year %in% factor(c(2016)), ], aes(x = contb_receipt_month)) + 
+   geom_bar(color = I('black'),fill = 'brown') + 
+   scale_x_discrete(limits = factor(seq(1,12,1)))
+
+ 
+grid.arrange(ggp2013, ggp2014, ggp2015, ggp2016, ncol = 2)
+```
+
+_**NOTE**_
+
+***_Number of contributions for 2013 and 2014 are only 46 contribution so it will  excluded from analysis._***
+
+
+**What is the monthly comparison for contributions count over 2015 and 2016 ?**
+
+```{r ggplot_contb_receipt_monthly_by_year2015_2016,echo=FALSE}
+
+
+ggplot(data = ny[ny$contb_receipt_year %in% factor(c(2015, 2016)), ], 
+       aes(x = contb_receipt_month)) + 
+  geom_bar(color = I('black'),fill = 'blue') + 
+  xlab("Month") + 
+  ylab("Contribution Count") + 
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10), 
+        title = element_text(size = 10), 
+        axis.text = element_text(size = 10),
+        legend.text = element_text(size = 10)) +
+  facet_wrap(~contb_receipt_year, ncol = 1)
+
+```
+
+
+
+#### **Observations**
+
+>
+  1- contributions in 2013 and 2014 are only 46 that is normal where there are no presidential election <br>
+>
+2- preparation for presidential election start almost 18 month befor election and reach the maximum on october 2016 <br>
+>
+3- Number of contribution in the election year 2016 was 589448 which is almost 10 times greater than 2015 which it was 59966 <br>
+
+
+___
+
+
+### Contribution Receipt Amount, `contb_receipt_amt`
+***_What is the range of contribution in NY state ?_***
+
+```{r summary_contb_receipt_amt,echo=FALSE}
+
+summary(ny$contb_receipt_amt)
+
+```
+
+***_How many Transaction in NY data set ?_***
+
+```{r Transaction_Amount,echo=FALSE}
+length(unique(ny$contb_receipt_amt))
+
+```
+
+
+>The Transaction amount `contb_receipt_amt` is widely distributed.  
+in the summary, the range from min to max values are from -10100 to 12777706.     
+
+***_Is there any more negative Transaction in NY data set ?_***     
+
+```{r summary_negative_contb_receipt_amt,echo=FALSE}
+
+length(table(sort(factor(ny[ny$contb_receipt_amt < 0, ]$contb_receipt_amt))))
+
+```
+***_what is the range of this negative Transaction ?_*** 
+```{r negative_Transaction_subset,echo=FALSE}
+
+negative.Transaction <- subset(ny,ny$contb_receipt_amt < 0)
+
+summary(negative.Transaction $contb_receipt_amt)
+```
+
+>The summary of factorized `contb_receipt_amt` shows there are 867 negative values.
+
+***_why there are negative Transaction?_*** 
+
+`receipt_desc` and `memo_text`  May be able to shed some light.     
+
+```{r summary_memo_text_for_negative_Transaction_subset,echo=FALSE}
+
+ summary(ny[ny$contb_receipt_amt < 0 & !is.na(ny$memo_text), ]$memo_text)
+
+```
+
+```{r summary_receipt_desc_for_negative_Transaction_subset,echo=FALSE}
+
+ summary(ny[ny$contb_receipt_amt < 0 & !is.na(ny$receipt_desc), ]$receipt_desc)
+
+```
+
+**_Now it is clear_**
+
+>The negative values comes from 'REFUND's, 'REATTRIBUTION's and 'REDESIGNATION's.    
+
+
+
+***_what is the summary of positive Transaction in NY data set ?_***
+
+```{r positive_Transaction_subset,echo=FALSE}
+positive_Transaction <- subset(ny,ny$contb_receipt_amt > 0)
+summary(positive_Transaction$contb_receipt_amt)
+
+```
+***_what is the summary of positive Transaction in NY data greater than 100$ ?_***
+```{r positive_Transaction_greater_than_100$,echo=FALSE}
+positive_Transaction_g100 <- subset(ny,ny$contb_receipt_amt >100)
+summary(positive_Transaction_g100$contb_receipt_amt)
+
+```
+***_how many positive Transactions in NY data greater than 100$?_***
+```{r number_of_positive_Transactions_greater_than_100$ ,echo=FALSE}
+
+length(positive_Transaction_g100$contb_receipt_amt)
+```
+***_how much positive Transactions in NY data greater than 100$?_***
+
+```{r sum_of_positive_Transactions_greater_than_100$ ,echo=FALSE}
+sum(positive_Transaction_g100$contb_receipt_amt)
+```
+
+
+***_how many positive Transactions in NY data less than 100$?_***
+```{r number_of_positive_Transactions_less_than_100$,echo=FALSE}
+positive_Transaction_l100 <- subset(ny,ny$contb_receipt_amt <=100)
+length(positive_Transaction_l100$contb_receipt_amt)
+
+```
+***_how much positive Transactions in NY data less than 100$?_***
+
+```{r sum_of_positive_Transactions_less_than_100$ ,echo=FALSE}
+sum(positive_Transaction_l100$contb_receipt_amt)
+```
+
+**_what are the number and amount of Transaction less than 100$ for every party ?_**
+
+```{r total_number_and_amount_of_Transaction_more_and_less_than_100$,echo=FALSE}
+
+ny.contb_receipt_amtl<- positive_Transaction_l100 %>%
+  group_by(cand_party) %>%
+  summarise(total_trans_l100 = sum(contb_receipt_amt),
+            total_countl = length(contb_receipt_amt))%>%
+  arrange(desc(total_trans_l100))
+
+ny.contb_receipt_amtl
+```
+
+
+***_plotting for amount and count of transaction less than 100$_***
+
+```{r plot_total_number_and_amount_of_Transaction_less_than_100,echo=FALSE}
+
+
+gplot_ny.con_rec_amtl <- ggplot(aes(x = reorder(cand_party, -total_trans_l100),
+                               y = total_trans_l100),
+                           data = ny.contb_receipt_amtl) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#F79420')) +
+  scale_y_sqrt()+
+  xlab('Political Party') +
+  ylab('sum of positive Transactions less than 100$') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+countplot_ny.con_rec_amtl <- ggplot(aes(x = reorder(cand_party, -total_countl),
+                               y = total_countl),
+                           data = ny.contb_receipt_amtl) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#F79420')) +
+  scale_y_sqrt()+
+  xlab('Political Party') +
+  ylab('total count of positive Transactions less than 100$') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+grid.arrange(gplot_ny.con_rec_amtl,countplot_ny.con_rec_amtl,ncol=2)
+
+```
+_
+
+***_what are the number and amount of Transaction greater than 100$ for every party ?_***
+
+```{r ny.contb_receipt_amtg,echo=FALSE}
+
+ny.contb_receipt_amtg<- positive_Transaction_g100 %>%
+  group_by(cand_party) %>%
+  summarise(total_trans_g100 = sum(contb_receipt_amt),
+            total_countg = length(contb_receipt_amt))%>%
+  arrange(desc(total_trans_g100)) 
+
+ny.contb_receipt_amtg
+
+
+```
+
+
+***_plotting for amount and count of transaction greater than 100$_***
+
+```{r plot_total_number_and_amount_of_Transaction_more_than_100,echo=FALSE}
+
+gplot_ny.con_rec_amtg <- ggplot(aes(x = reorder(cand_party, -total_trans_g100),
+                               y = total_trans_g100),
+                           data = ny.contb_receipt_amtg) +
+  geom_bar(stat="identity",color = I('black'),fill = 'blue') +
+  scale_y_sqrt()+
+  xlab('Political Party') +
+  ylab('sum of positive Transactions greater than 100$') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size =7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+countplot_ny.con_rec_amtg <- ggplot(aes(x = reorder(cand_party, -total_countg),
+                               y = total_countg),
+                           data = ny.contb_receipt_amtg) +
+  geom_bar(stat="identity",color = I('black'),fill = 'blue') +
+  scale_y_sqrt()+
+  xlab('Political Party') +
+  ylab('total count of positive Transactions greater than 100$') + 
+  theme_minimal() + 
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 10), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+grid.arrange(gplot_ny.con_rec_amtg,countplot_ny.con_rec_amtg,ncol=2)
+```
+
+
+***_comparing count of transaction between group less than 100$ and greater than 100$_***
+
+```{r,comparing_count_of_less_greater_100$,echo=FALSE}
+grid.arrange(countplot_ny.con_rec_amtl,countplot_ny.con_rec_amtg,ncol=2)
+```
+
+***_comparing amount of transaction between group less than 100$ and greater than 100$_***
+
+```{r,comparing_amountless_greater_100$,echo=FALSE}
+grid.arrange(gplot_ny.con_rec_amtl,gplot_ny.con_rec_amtg,ncol=2)
+```
+
+#### **Observations**
+
+>1- according to political party Democratic recive total number and  amount of Transactions greater than all other parties <br>
+
+>2- Number of Transactions less than 100$ almost 5 times greater than that more than 100$<br>
+
+>3- Amount of Transactions more than 100 $ are greater than that less than 100$<br>
+
+>4- Democratic party recieve amount of Transactions more than 100$ close to the amount  of Transactions less than 100$<br>
+
+>5-Republican party recieve amount of Transactions more than 100$ vary dramatically than the amount of Transactions less than 100$<br>
+
+___
+
+### Election Type `election_tp`  
+
+***What are unique values of Election Type?***
+
+```{r unique_values,echo=FALSE}
+unique(ny$election_tp)
+```
+
+***How many unique values are for Election Type?***
+
+```{r length_election_tp,echo=FALSE}
+
+length(unique(ny$election_tp))
+```
+
+***How many contribution every type of election have ?***
+
+```{r summary,echo=FALSE}
+summary(ny$election_tp)
+
+```
+
+***Below is a chart of `election_tp`.*** 
+
+
+```{r qplot_election_tp,echo=FALSE}
+
+ny_electiontp <- qplot(x = election_tp, data = ny,color = I('black'),fill = I('#099DD9')) + 
+  labs(title = c('Contribution Count by Election Type'), x = c("Election Type"), y = c('Contribution Count')) +
+  theme(text = element_text(size = 10), strip.text = element_text(size = 10), title = element_text(size = 10), axis.text = element_text(size = 10), legend.text = element_text(size = 10),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+ny_electiontp_log10 <-qplot(x = election_tp, data = ny,color = I('black'),fill = I('#099DD9')) +
+  scale_y_log10() +
+  labs(title = c('Log10(Contribution Count) by Election Type'), x = c("Election Type"), y = c('Log10(Contribution Count)')) +
+  theme(text = element_text(size = 10), strip.text = element_text(size = 10), title = element_text(size = 10), axis.text = element_text(size = 10), legend.text = element_text(size = 10),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+grid.arrange(ny_electiontp,ny_electiontp_log10,ncol=2)
+
+```
+
+
+>It is interesting to note that there are already 3 transactions marked for the P2020 election.  Most contributions are marked for the Presidential Election 2016, second by the General Election 2016.  There are also  690 contributions  without specifying election type data, and  237 marked for other election type.***    
+
+
+___
+
+### Contributor City `contbr_city`
+
+
+***How many  cities contributions are come from ?***
+
+```{r length_contbr_city ,echo=FALSE}
+length(unique(ny$contbr_city))
+```
+
+***How maney contributions are come from every city?***
+
+```{r summary_contbr_city ,echo=FALSE}
+summary(ny$contbr_city)
+```
+
+***What is the rankinking of cities that contribution come from ***
+
+```{r ny.count_by_contbr_city,echo=FALSE}
+
+ny.count_by_contbr_city <- ny %>%
+  group_by(contbr_city) %>%
+  summarise(city.rank= sum(contb_receipt_amt),
+            count_of_contrib =n()) %>%
+  mutate(proportion = city.rank / sum(city.rank)) %>%
+  arrange(desc(city.rank))
+
+ny.count_by_contbr_city
+
+```
+
+
+***Below is a chart of proportion of contributions from the top 20 cities by count.***  
+
+```{r ggplot_count_by_contbr_city,echo=FALSE}
+
+ggplot(ny.count_by_contbr_city[1:20,], 
+       aes(x = reorder(contbr_city,-proportion),
+           y = proportion)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = I('#099DD9')) +
+  scale_y_sqrt()+
+  labs(title = c('Contribution amount Proportion by Contributor City'), 
+       x = c("Contributor City"), 
+       y = c('Proportion')) +
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10), 
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+```
+
+
+***There are 2327 different `contbr_city` where contribution come from.  Most contributions***<br>
+          
+        NEW YORK    206993                          
+                                     
+        BROOKLYN    86953  
+
+***Those accounts for about 45.3% of the contribution count.*** 
+
+___
+
+
+### Contributor Zip `contbr_zip`  
+>Since not all rows come with zip codes in full 9 digits, I decided to use the short version of zip for the EDA exercise.  It's added as an additional column, `contbr_zip_short` to NY dataset. 
+
+
+```{r contbr_zip_to_contbr_zip_short,echo=FALSE}
+ny$contbr_zip_short <- factor(substr(ny$contbr_zip, start = 1, stop = 5))
+
+```
+**how many Contributor Zip in NY data set** ?
+
+```{r length_Contributor_Zip,echo=FALSE}
+length(unique(ny$contbr_zip_short))
+```
+
+***How many contributions  every zip are recieve ?***
+
+
+```{r summary_contbr_zip_short,echo=FALSE}
+
+summary(ny$contbr_zip_short)
+
+```
+
+**_What is the rankinking of zipcodes that recieve contribution ?_**
+
+
+```{r ny.count_by_contbr_zip_short,echo=FALSE}
+ny.count_by_contbr_zip_short <- ny %>%
+  group_by(contbr_zip_short) %>%
+  summarise(zip.amount.rank= sum(contb_receipt_amt),
+            zip.amount.rank_n =n()) %>%
+  mutate(proportion = zip.amount.rank / sum(zip.amount.rank)) %>%
+  arrange(desc(zip.amount.rank))
+
+ny.count_by_contbr_zip_short
+```
+
+***A chart of proportion of contributions from the top 20 zipcodes by count.***      
+
+```{r ggplot_amount_by_contbr_zip_short,echo=FALSE}
+ 
+ggplot(ny.count_by_contbr_zip_short[1:20,],
+       aes(x = reorder(contbr_zip_short, -proportion), 
+           y = proportion)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = 'red') +
+  scale_y_sqrt()+
+  labs(title = c('Contribution Proportion by Contributor Zipcode'),
+       x = c("Contributor Zipcode"), 
+       y = c('Proportion')) +
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10),
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+**_1-There are 1936 distinct zipcodes._**
+
+**_2-most contribution from area with zipcode 10185 which is belong to NEW YORK state._**
+
+___
+
+
+### Contributor Employer `contbr_employer`
+
+_** How many Contributor's Employer in NY data set ?**_
+```{r contbr_employer,echo=FALSE}
+length(unique(ny$contbr_employer))
+```
+
+
+***for more details we can use this code line***
+```{r summary_contbr_employer,echo=FALSE}
+
+# summary(ny$contbr_employer)
+
+```
+
+
+_**What is the rankinking of Contributor's Employer ?  **_
+
+```{r ny_by_contbr_employer,echo=FALSE}
+ny_by_contbr_employer<- ny %>%
+  group_by(contbr_employer) %>%
+  summarise(employer.rank= sum(contb_receipt_amt),
+            contr_n =n()) %>%
+  mutate(proportion = employer.rank / sum(employer.rank)) %>%
+  arrange(desc(employer.rank))
+
+ny_by_contbr_employer
+
+```
+
+***A chart of proportion of contributions from the top 10 Contributor's Employer.***
+
+```{r ggplot_count_by_contbr_employer,echo=FALSE}
+
+ggplot(ny_by_contbr_employer[1:10,],
+       aes(x = reorder(contbr_employer, -proportion), 
+           y = proportion)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = 'pink') +
+  scale_y_sqrt()+
+  labs(title = c("Contribution Count Proportion by Contributor's Employer"),
+       x = c("Contributor Employer"), 
+       y = c('Proportion')) +
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10),
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+#### **Observations**
+
+***There are 39304 distinct employers.***   
+
+
+**1- NY data set  have 78686342.68 contributions with no data for Contributor's Employer**
+
+**2- NY data set  have 10119157.49 contributions with N/A data for Contributor's Employer**
+
+**3- NY data set have	3611890.31 contributions with INFORMATION REQUESTED for Contributor's Employer**
+
+**4- RETIRED , NOT EMPLOYED , NONE , SELF EMPLOYED , HOMEMAKER , SELF may be contributors refuse to provide the employer information **
+
+___
+
+
+
+### Contributor Occupation `contbr_occupation`
+
+
+_**How many Contributor's Occupation are interested to contribute ? **_
+
+```{r Contributor_Occupation,echo=FALSE}
+length(unique(ny$contbr_occupation))
+```
+
+***for more details we can use this code line***
+
+```{r summary_contbr_occupation,echo=TRUE}
+#summary(ny$contbr_occupation)
+```
+
+_**What is the rankinking of Contributor's Employer ?  **_
+
+```{r ny_contbr_occupation,echo=FALSE}
+ny_contbr_occupation <- ny %>%
+  group_by(contbr_occupation) %>%
+  summarise(occupation.rank= sum(contb_receipt_amt),
+            contr_n =n()) %>%
+  mutate(proportion = occupation.rank / sum(occupation.rank)) %>%
+  arrange(desc(occupation.rank))
+
+ny_contbr_occupation
+
+```
+
+***A chart of percentage of contributions  from the top 10 contributor's occupation .***
+
+```{r ggplot_amount_of_contbr_by_occupation,echo=FALSE}
+
+
+ggplot(ny_contbr_occupation[1:10,],
+       aes(x = reorder(contbr_occupation, -proportion), 
+           y = proportion)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = 'yellow') +
+  scale_y_sqrt()+
+  labs(title = c("Contribution Count Proportion by Contributor's Employer"),
+       x = c("Contributor Employer"), 
+       y = c('Proportion')) +
+  theme(text = element_text(size = 7),
+        strip.text = element_text(size = 7),
+        title = element_text(size = 7), 
+        axis.text = element_text(size = 7),
+        legend.text = element_text(size = 7),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+>There are 17220 distinct `contbr_occupation`  The top 10 `contbr_occupation` with the highest counts are `""` , 'RETIRED', 'ATTORNEY', 'INFORMATION REQUESTED', 'LAWYER', 'NOT EMPLOYED', 'HOMEMAKER', 'CONSULTANT', 'PHYSICIAN' 'CEO 'These top 10 `contbr_occupation` made up for 66.2% of the contribution counts.  
+
+___
+
+
+## Final Univariate Analysis     
+**1.   What is the structure of dataset?**    
+
+>There are  649460 contribution transaction records in the dataset with 18 variables (cmte_id, cand_id, cand_nm, contbr_nm, contbr_city, contbr_st, contbr_zip, contbr_employer, contbr_occupation, contb_receipt_amt, contb_receipt_dt, receipt_desc, memo_cd, memo_text, form_tp, file_num, trans_id, election_tp). 
+
+>All these variables are unordered variables, except for contb_receipt_amt (num) and file_num (int). 
+
+
+>Each candidate has unique `cand_id`, `cand_nm` and a designated filer `cmte_id` who filed contributions for them.    
+- Clinton, Hillary Rodham accounted for roughly 61.5% of the contribution transactions, followed by Sanders 26.9% , Trump 5.6%      
+- The high count of contribution transactions however may not be a direct representation of the net contribution amount, because there are REFUNDs, REATTRIBUTIONs, REDESIGNATIONS and CHARGE BACKs in the dataset.    
+- 75 % of the contribution transactions were less than or equal to 100$ 
+- Daily trend showed peaks at end of the month, except for the month of November 2016 and December 2016.    
+- Monthly trend showed that the contributions started happening March 2015, and peaked in Oct 2016. Contributions slowed in Nov 2016 and dropped sharply in Dec 2016 post election.      
+- 70% of the contribution transactions came from 'NEW YORK'
+- 67.25 % of the contribution transactions were made up by these top 10 `contbr_employer`: `'"" '`, 'RETIRED', 'SELF-EMPLOYED', 'N/A', 'INFORMATION REQUESTED', 'NOT EMPLOYED ', NONE',  'SELF EMPLOYED' ,'SELF'and 'HOMEMAKER'.        
+- 66.2 % of the contribution transactions of from contributors who listed ,`'""'` ,'RETIRED', 'ATTORNEY', 'INFORMATION REQUESTED', 'LAWYER', ' NOT EMPLOYED', 'HOMEMAKER ', 'CONSULTANT', 'PHYSICIAN ', 'CEO ' as `contbr_employer`.    
+
+**2.  What is/are the main feature(s) of interest in  dataset?**     
+
+>The main features in the dataset are contribution date, contribution amount, candidate name and candidate party affiliation (a variable I added).  The other variables may have impact on predicting the contribution amount.
+
+**3.  What other features in the dataset do you think will help support your investigation into your feature(s) of interest?**   
+
+>other variables like contributor city, contributor zip, contributor occupation may have impact on the contribution amount.  However, for project I decided to focus on candidate names, candidate party affiliation and contribution date, and may be a bit on contributor city. 
+
+**4.  Did you create any new variables from existing variables in the dataset?**    
+
+>Party affiliation for each candidate was identified and added as `cand_party`.
+The dates `contb_receipt_dt` were originally in factor type.  The column was converted to Date type.  They were also broken down the date into `contb_receipt_day`, `contb_receipt_month`, `contb_receipt_month_name`, and `contb_receipt_year`.    
+ The data in `contbr_zip` was not consistent.  Additional variable `contbr_zip_short` was added to only extract the first 5 digit of `contbr_zip`.
+`file_num` was also converted into factor type but not analyzed.     
+
+**5.  Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?**    
+
+>Log10 and sqrt transformation  were performed on `cand_nm`, `cand_party`  `contb_receipt_amt`,`contbr_nm`,`contbr_zip`and `contbr_occupation`.  
+>The log10 transformation on `cand_nm` helped easily filter out the vast differences of contribution counts by each candidate.  
+>The log10 transformation on `contb_receipt_amt` helped shape sekewed chart into a somewhat normal distribution
+
+
+___
+
+
+## _Bivariate Plots_
+
+___
+
+
+***Sum of Contribution Amount received by Candidates*** 
+
+```{r sum_contb_receipt_amt_by_cand_nm,echo=FALSE}
+ny.sum_contb_receipt_amt_by_cand_nm <- ny %>%
+  group_by(cand_nm) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt), 
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt), 
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n),
+         sum_proportion = sum_amt / sum(sum_amt)) %>%
+  arrange(desc(sum_amt)) 
+
+ny.sum_contb_receipt_amt_by_cand_nm
+
+```
+
+***Ranking for sum of contribution received for the top 10 candidates (by sum of contribution amount).***    
+
+```{r ranking_top_10,echo=FALSE}
+
+ggp_sum_by_cand_nm <- ggplot(ny.sum_contb_receipt_amt_by_cand_nm[1:10,],
+                             aes(x = reorder(cand_nm, -sum_amt),
+                                 y = sum_amt/1000000)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = I('#099009')) + 
+  labs(title = c('Sum of Contribution Amount by Candidate Name'),
+       x = c("Candidate Name"), 
+       y = c('Sum of Contribution Amount in 1000000s')) +
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10),
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 7),
+        legend.text = element_text(size = 10),  
+        axis.text.x = element_text(angle = 90, hjust = 1))
+ggp_sum_by_cand_nm
+
+```
+
+
+***Who are the top 5 candidates received contribution*** 
+
+
+```{r subset_top5_cand_nm_by_amt,echo=FALSE}
+
+top5_cand <- ny.sum_contb_receipt_amt_by_cand_nm[1:5,]
+
+top5_cand$cand_nm
+
+ny_subset_top5_cand_nm_by_amt <- ny[ny$cand_nm %in% top5_cand$cand_nm,]
+
+
+```
+
+
+### Distribution of Contribution Receipt Amount by Top 5 Candidates    
+
+```{r contb_receipt_amt_by_top5_cand_nm,echo=FALSE}
+
+ny.contb_receipt_amt_by_top5_cand_nm <- ny_subset_top5_cand_nm_by_amt %>%
+  group_by(cand_nm, contb_receipt_amt) %>%
+  summarise(n=n(), cum_amt = sum(contb_receipt_amt))
+ 
+
+summary(ny.contb_receipt_amt_by_top5_cand_nm)
+
+```
+
+
+***Boxplot for distribution of contribution amounts received for the top 5 candidates (by sum of contribution amount).***
+
+
+```{r ggplot_contb_receipt_amt_by_top5_cand_nm,echo=FALSE}
+
+ggplot(ny_subset_top5_cand_nm_by_amt, aes(x = cand_nm,
+                                          y = contb_receipt_amt)) + 
+  geom_boxplot() + 
+  labs(title = c('Contribution Amount by Top 5 Candidate'),
+       x = c("Candidate Name"), y = c('Contribution Amount')) +
+  theme(text = element_text(size = 10), 
+        strip.text = element_text(size = 10),
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+```{r summary_contb_receipt_amt_by_top5_cand_nm,echo=FALSE}
+
+by(ny_subset_top5_cand_nm_by_amt$contb_receipt_amt, ny_subset_top5_cand_nm_by_amt$cand_nm, summary)
+
+```
+
+
+***using ylim to exclude some outliers such as in Clinton, Hillary Rodham***
+
+
+```{r lim2700_contb_receipt_amt_by_top5_cand_nm,echo=FALSE}
+
+ggp_dist_by_top5_cand <- ggplot(ny_subset_top5_cand_nm_by_amt, 
+                                aes(x = cand_nm, 
+                                    y = contb_receipt_amt)) +  
+  geom_boxplot() + 
+  stat_summary(fun.y = "mean", geom = "point", shape= 23, size= 5, 
+               fill = 'red') + 
+  coord_cartesian(ylim = c(0, 2700)) + 
+  labs(title = c('Contribution Amount by Top 5 Candidates'),
+       x = c("Candidate Name"),
+       y = c('Contribution Amount')) +
+  theme(text = element_text(size = 10), 
+        strip.text = element_text(size = 12), 
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggp_dist_by_top5_cand
+
+```
+
+
+### Sum of Contribution Receipt Amount by Party Affiliation     
+
+   
+```{r sum_contb_receipt_amt_by_cand_party,echo=FALSE}
+ny.sum_contb_receipt_amt_by_cand_party <- ny %>%
+  group_by(cand_party) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt), 
+            mean = mean(contb_receipt_amt),
+            max = max(contb_receipt_amt), 
+            min = min(contb_receipt_amt),
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), 
+         sum_proportion = sum_amt / sum(sum_amt)) %>%
+  arrange(desc(sum_amt)) 
+
+ny.sum_contb_receipt_amt_by_cand_party
+
+
+```
+
+***Barchart of sum of contribution amount received by every party affiliation. ***
+
+```{r plotting sum_contb_receipt_amt_by_cand_party,echo=FALSE}
+
+ggp_sum_by_cand_party <- ggplot(ny.sum_contb_receipt_amt_by_cand_party,
+                                aes(x = reorder(cand_party, -sum_amt), 
+                                    y = sum_amt/1000000)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = I('#F79420')) + 
+  scale_y_log10()+
+  labs(title = c('Sum of Contribution Amount by Party Affiliation'), 
+       x = c("Candidate Party Affiliation"),
+       y = c('Sum of Contribution Amount in 1000000s')) +
+  theme(text = element_text(size = 12),
+        strip.text = element_text(size = 12), 
+        title = element_text(size = 10),
+        axis.text = element_text(size = 10), 
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggp_sum_by_cand_party
+
+```
+
+
+___
+
+### Distribution of Contribution Receipt Amount by Candidate Party Affiliation   
+
+
+```{r contb_receipt_amt_by_cand_party,echo=FALSE}
+
+ny.contb_receipt_amt_by_cand_party <- ny %>%
+  group_by(cand_party, contb_receipt_amt) %>%
+  summarise(n=n(), cum_amt = sum(contb_receipt_amt))
+summary(ny.contb_receipt_amt_by_cand_party)
+
+```
+
+
+***Boxplot for distribution of contribution amounts received by each party affiliation.***
+
+
+```{r plotting_contb_receipt_amt_by_cand_party,echo=FALSE}
+
+ggplot(ny, aes(x = cand_party, y = contb_receipt_amt)) +  
+  geom_boxplot() + 
+  labs(title = c('Contribution Amount by Party Affiliation'), 
+       x = c("Candidate Party Affiliation"), 
+       y = c('Contribution Amount')) +
+  theme(text = element_text(size = 7), strip.text = element_text(size = 7), title = element_text(size = 7), axis.text = element_text(size = 7), legend.text = element_text(size = 7),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+```{r summary_contb_receipt_amt_by_cand_party,echo=FALSE}
+by(ny$contb_receipt_amt, ny$cand_party, summary)
+```
+
+***using ylim to exclude some outliers such as in Democratic***
+
+
+```{r lim350_contb_receipt_amt_by_cand_party,echo=FALSE}
+
+
+ggp_dist_by_cand_party <- ggplot(ny, aes(x = cand_party,
+                                         y = contb_receipt_amt)) + 
+  geom_boxplot() + 
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               shape= 23, size= 5,
+               fill = 'red') + 
+  coord_cartesian(ylim = c(-200,350))+ 
+  labs(title = c('Contribution Amount by Party Affiliation'),
+       x = c("Candidate Party Affiliation"),
+       y = c('Contribution Amount')) +
+  theme(text = element_text(size = 10), 
+        strip.text = element_text(size = 12),
+        title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggp_dist_by_cand_party
+
+```
+
+
+### Sum of Contribution Receipt Amount by Top 20 Cities     
+
+
+```{r sum_contb_receipt_amt_by_contbr_city,echo=FALSE}
+
+ny.sum_contb_receipt_amt_by_contbr_city <- ny %>%
+  group_by(contbr_city) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt), 
+            mean = mean(contb_receipt_amt), 
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt),
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+  arrange(desc(sum_amt)) 
+
+ ny.sum_contb_receipt_amt_by_contbr_city
+ 
+```
+
+
+***Barchart of sum of contribution received from top 20 contributor cities (by sum of contribution received).***  
+
+ 
+```{r ggplot_sum_contb_receipt_amt_by_contbr_city,echo=FALSE} 
+
+ggplot(ny.sum_contb_receipt_amt_by_contbr_city[1:20,], 
+       aes(x = reorder(contbr_city, -sum_amt), 
+           y = sum_amt/1000000)) +  
+  geom_bar(stat = "identity",color = I('black'),fill = 'green') + 
+  scale_y_log10()+
+  labs(title = c('Sum of Contribution Amount by City'),
+       x = c("City"), y = c('Sum of Contribution Amount (in 1000000s)')) +
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size = 10),
+        title = element_text(size = 10), 
+        axis.text = element_text(size = 10), 
+        legend.text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+
+***subset for top20_city and top10_city according to amount of contributions***
+
+```{r subset_top20_city_by_amt,echo=TRUE}
+
+top20_city <- ny.sum_contb_receipt_amt_by_contbr_city[1:20,]
+
+ny_subset_top20_city_by_amt <- ny[ny$contbr_city %in% top20_city$contbr_city,]
+
+top10_city <- ny.sum_contb_receipt_amt_by_contbr_city[1:10,]
+ny_subset_top10_city_by_amt <- ny[ny$contbr_city %in% top10_city$contbr_city,]
+
+```
+
+
+### Distribution of Contribution Receipt Amount by Top 20 Cities   
+
+
+```{r contb_receipt_amt_by_top20_city,echo=FALSE}
+ny.contb_receipt_amt_by_top20_city <- ny_subset_top20_city_by_amt %>%
+  group_by(contbr_city, contb_receipt_amt) %>%
+  summarise(n=n(), cum_amt = sum(contb_receipt_amt))
+
+```
+
+
+***Boxplot for distribution of contribution amounts received for the top 20 cities (by sum of contribution amount).***
+
+```{r ggplot_contb_receipt_amt_by_top20_city,echo=FALSE}
+
+ggplot(ny_subset_top20_city_by_amt,
+       aes(x = contbr_city, y = contb_receipt_amt)) +  
+  geom_boxplot() + 
+  labs(title = c('Contribution Amount by Top 20 Cities'), 
+       x = c("City"), y = c('Contribution Amount')) +
+  theme(text = element_text(size = 10), 
+        strip.text = element_text(size = 10),
+        title = element_text(size = 12),
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+```{r summary_contb_receipt_amt_by_top20_contbr_city,echo=FALSE}
+
+summary(ny_subset_top20_city_by_amt)
+
+#by(ny_subset_top20_city_by_amt$contb_receipt_amt, ny_subset_top20_city_by_amt$contbr_city,summary)
+
+```
+
+```{r lim_400_contb_receipt_amt_by_top20_cities,echo=FALSE}
+
+ggplot(ny_subset_top20_city_by_amt, 
+       aes(x = contbr_city, y = contb_receipt_amt)) +  
+  geom_boxplot() + 
+  stat_summary(fun.y = "mean", geom = "point", shape= 23, 
+               size= 5, fill = 'red') + 
+  coord_cartesian(ylim = c(0,400 )) + 
+  labs(title = c('Contribution Amount by Top 20 Cities'), 
+       x = c("City"), y = c('Contribution Amount')) +
+  theme(text = element_text(size = 7), 
+        strip.text = element_text(size = 7),
+        title = element_text(size = 7), 
+        axis.text = element_text(size = 7), 
+        legend.text = element_text(size = 7), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+### Sum of Contribution Receipt Amount by Contribution Year, Month, day and Date   
+
+```{r sum_contb_receipt_amt_by_contb_receipt_year_month_day,echo=FALSE,fig.height=20}
+
+ny.sum_contb_receipt_amt_by_contb_receipt_dt <- ny %>%
+  group_by(contb_receipt_dt) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt),
+            max = max(contb_receipt_amt), 
+            min = min(contb_receipt_amt),
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+  arrange(desc(sum_amt))
+ny.sum_contb_receipt_amt_by_contb_receipt_dt
+
+
+ny.sum_contb_receipt_amt_by_contb_receipt_year_month_day <- ny %>%
+  group_by(contb_receipt_year, contb_receipt_month, contb_receipt_day) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt), 
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt),
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+  ungroup() %>%
+  arrange(desc(sum_amt)) 
+ny.sum_contb_receipt_amt_by_contb_receipt_year_month_day
+
+
+ggplot(data = subset(ny.sum_contb_receipt_amt_by_contb_receipt_year_month_day, contb_receipt_year == 2015 | contb_receipt_year == 2016), 
+       aes(x = contb_receipt_day, y = sum_amt/10000000)) + 
+  geom_bar(stat = "identity",
+           aes(fill = contb_receipt_year)) + 
+  facet_wrap(~contb_receipt_month, ncol = 2) + 
+  scale_fill_discrete(name="Contribution Year") +
+  labs(title = c('Sum of Contribution Amount by Date'),
+       x = c("Date"), 
+       y = c('Sum of Contribution Amount (in 100000000s)')) + 
+  theme(text = element_text(size = 10),
+        strip.text = element_text(size =10),
+        title = element_text(size = 10), 
+        axis.text = element_text(size = 10),
+        legend.text = element_text(size = 7),
+        legend.position= "bottom", axis.text.x = element_text(angle = 90,
+                                                              hjust = 1))
+
+
+```
+
+
+### Distribution of Contribution Receipt Amount by Contribution Year, Month, Date 
+
+***Boxplot for contribution of contribution amounts received by Year, Month, Day.*** 
+   
+
+```{r contb_receipt_amt_by_contb_receipt_year_month_day,fig.height=20,echo=FALSE}
+
+ ny.contb_receipt_amt_by_contb_receipt_year_month_day <- ny %>%
+   group_by(contb_receipt_year, contb_receipt_month, contb_receipt_day, contb_receipt_amt) %>%
+   summarise(n=n(), cum_amt = sum(contb_receipt_amt))
+ summary(ny.contb_receipt_amt_by_contb_receipt_year_month_day)
+ 
+ggplot(subset(ny, contb_receipt_year == 2015 | contb_receipt_year == 2016),
+       aes(x = contb_receipt_day, y = contb_receipt_amt)) +  
+  geom_boxplot(aes(fill = contb_receipt_year)) +
+  facet_wrap(~contb_receipt_month,ncol = 2) + 
+  scale_fill_discrete(name="Contribution Year") +
+  labs(title = c('Distribution of Contribution Amount by Date'),
+       x = c("Date"),
+       y = c('Contribution Amount')) +
+  theme(text = element_text(size =7),
+        strip.text = element_text(size = 7), 
+        title = element_text(size = 7),
+        axis.text = element_text(size = 7),
+        legend.text = element_text(size =7), 
+        legend.position= "bottom",
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+ 
+
+```
+
+
+***Using ylim from 0:3000***
+
+```{r lim3000_contb_receipt_amt_by_contb_receipt_year_month_day,fig.height=20,echo=FALSE}
+
+ggplot(subset(ny, contb_receipt_year == 2015 | contb_receipt_year == 2016),
+       aes(x = contb_receipt_day, y = contb_receipt_amt)) +
+  geom_boxplot(aes(fill = contb_receipt_year)) +
+  stat_summary(fun.y = "mean", geom = "point", shape=1, 
+               size= 5,fill = 'blue') + 
+  facet_wrap(~contb_receipt_month, ncol = 2) +
+  coord_cartesian(ylim = c(0,3000)) + 
+  scale_fill_discrete(name="Contribution Year") +
+  labs(title = c('Distribution of Contribution Amount by Date'), 
+       x = c("Date"), y = c('Contribution Amount')) +
+  theme(text = element_text(size = 7), 
+        strip.text = element_text(size = 7),
+        title = element_text(size = 7), 
+        axis.text = element_text(size = 7),
+        legend.text = element_text(size = 7),
+        legend.position= "bottom",
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+
+
+***Using ylim from 0:100***
+
+```{r lim100_contb_receipt_amt_by_contb_receipt_year_month_day,fig.height=20,echo=FALSE}
+
+ggplot(subset(ny, contb_receipt_year == 2015 | contb_receipt_year == 2016),
+       aes(x = contb_receipt_day, y = contb_receipt_amt)) +
+  geom_boxplot(aes(fill = contb_receipt_year)) +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, 
+               size= 5,fill = 'blue') + 
+  facet_wrap(~contb_receipt_month, ncol = 2) +
+  coord_cartesian(ylim = c(0,100)) + 
+  scale_fill_discrete(name="Contribution Year") +
+  labs(title = c('Distribution of Contribution Amount by Date'), 
+       x = c("Date"), y = c('Contribution Amount')) +
+  theme(text = element_text(size = 7), 
+        strip.text = element_text(size = 7),
+        title = element_text(size = 7), 
+        axis.text = element_text(size = 7),
+        legend.text = element_text(size = 7),
+        legend.position= "bottom",
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+## _Bivariate Analysis_
+
+___
+
+**1.Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?**    
+
+>The sum of contribution receipt amount `contb_receipt_amt` indicated strong correlation with party affiliation `cand_party`.  Given New York is a blue state, it is not surprising that the Democratic received distinctively higher contribution amount \$154 millions,compared to other parties.  The Republican party came second with \$17.5 millions 
+
+>Distribution boxplots and the summary shows contribution amount received by Democratic are generally higher than that of Republican.  and the data points are mostly on the Democratic party.  
+
+>The sum of contribution receipt amount `contb_receipt_amt` also strongly correlates with candidate `cand_nm`.  Clinton, Hillary Rodham received the most contribution . Sanders, Bernard in second place, Trump, Donald J. came in third.  
+
+>Looking at the distribution boxplots, there must be a higher proportion of Clinton supporters who could be more generous or well off than Sanders's, with the mean contribution amount located above of the 3rd Q.  It is almost 3 times of the mean of Sanders.  Although both the mean and median of Trumps's contribution amount are higher than that of Clinton's and Sanders', he lost by the lack of supporters (ie lower count of contributions).  In terms of contribution amount and counts Clinton won by a landslide.  
+
+>Over the course of two years, 2015 and 2016, the sum of contribution shows a pattern over time.  As suspected in the univariate analysis, the contribution started coming in in March 2015, yet majority amount of the contributions comes in year 2016.  
+
+>The spikes and small jumps also coincides with presidential campaign phases.  Notably on June 30th, 2016, before Republican National Convention and Democratic National Convention, there is a spike in contribution.  Another obvious spike was starting September 26th till September 30th, 2016, after the first Presidential Debate.  
+
+>There were small jumps in contribution after the 3rd presidential debate on October 19, 2016, and the week before Election Day on November 8th, 2016.  
+
+
+**2.  Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?**    
+
+>Comparing the distributions for contribution amount across top 20 cities, there were only some small variations, not any significant trends, except for New york.  
+
+
+**3.  What was the strongest relationship you found?**    
+
+>The sum of contribution amounts has the strongest correlations with candidate party affiliation `cand_party`, contb_receipt_dt, and candidate himself/herself `cand_nm`.   The sum of contribution amounts also had a seosonal trend, and changed along with the various campaign phases.  
+
+
+___
+
+
+
+## _Multivariate Plots_   
+
+
+___
+
+
+```{r subset_contb_receipt_amt_by_top20_contbr_city_and_top5_cand_nm,echo=FALSE}
+
+ny_subset_top20_city_top5_cand_nm <- ny_subset_top20_city_by_amt[ny_subset_top20_city_by_amt$cand_nm %in% top5_cand$cand_nm,]
+
+ny_subset_top5_cand_nm_top20_city <- ny_subset_top5_cand_nm_by_amt[ny_subset_top5_cand_nm_by_amt$contbr_city %in% top20_city$contbr_city,]
+
+```
+
+
+***Sum of Contribution Receipt Amount for Top 5 Candidates (by contribution receipt amount) by Date***
+
+```{r sum_contb_receipt_amt_by_cand_nm_and_contb_receipt_year_month_day,fig.width=15,echo=FALSE}
+
+ny.sum_contbr_receipt_amt_by_cand_nm_and_receipt_dt <-
+  ny_subset_top5_cand_nm_by_amt %>%
+  group_by(cand_nm, contb_receipt_year,
+           contb_receipt_month, contb_receipt_day) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt),
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt),
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n),
+         sum_proportion = sum_amt / sum(sum_amt)) %>%
+  ungroup() %>%
+  arrange(desc(sum_amt))
+
+ ny.sum_contbr_receipt_amt_by_cand_nm_and_receipt_dt
+ 
+ 
+
+ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_nm_and_receipt_dt,
+                     contb_receipt_year == 2015 | contb_receipt_year == 2016),
+       aes(x = contb_receipt_day, y = sum_amt/1000000, fill = cand_nm)) +
+  geom_bar(stat = "identity", aes(fill = cand_nm)) +
+  facet_grid(contb_receipt_year~contb_receipt_month) +
+  scale_fill_discrete(name="Candidate Name") +
+  labs(title = c('Sum of Contribution Amount by Date'), 
+       x = c("Date"), y = c('Sum of Contribution Amount (in 1000000s)')) +
+  theme(text = element_text(size = 14),
+        strip.text = element_text(size = 14), 
+        title = element_text(size = 14), 
+        axis.text = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position= "bottom", axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+***Sum of Monthly Contribution Receipt Amount for Candidate Party Affiliation (Year 2015 and 2016)***
+
+```{r sum_contbr_receipt_amt_by_cand_party_and_receipt_dt,fig.hight=25,echo=FALSE}
+
+ny.sum_contbr_receipt_amt_by_cand_party_and_receipt_dt <- ny %>%
+  group_by(cand_party, contb_receipt_year, contb_receipt_month) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt),
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt),
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+  ungroup() %>%
+  arrange(desc(sum_amt))
+
+ny.sum_contbr_receipt_amt_by_cand_party_and_receipt_dt
+
+ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_party_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016), aes(x = contb_receipt_month, y = sum_amt/1000000, fill = cand_party)) + 
+  geom_bar(stat = "identity", aes(fill = cand_party)) + 
+  facet_wrap(~contb_receipt_year, ncol = 1) + 
+  scale_fill_manual(name="Party Affiliation",
+                    values=c("blue", "green", "purple", "gold", "red")) +
+  labs(title = c('Sum of Contribution Amount by Month'), 
+       x = c("Month"), y = c('Sum of Contribution Amount (in 1000000s)')) + 
+  theme(text = element_text(size = 14), strip.text = element_text(size = 14), title = element_text(size = 14), axis.text = element_text(size = 14), legend.text = element_text(size = 9), legend.position= "bottom", axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_party_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016), aes(x = contb_receipt_month, y = sum_proportion, fill = cand_party)) + 
+   geom_bar(stat = "identity", 
+            aes(fill = cand_party), position=position_fill()) + 
+   facet_wrap(~contb_receipt_year, ncol = 1) + 
+   scale_fill_discrete(name="Party Affiliation") +
+   labs(title = c('Proportion of Contribution Amount Sum by Month'),
+        x = c("Month"), y = c('Proportion of Contribution Amount Sum')) + 
+   theme(text = element_text(size = 14), strip.text = element_text(size = 14), title = element_text(size = 14), axis.text = element_text(size = 14), legend.text = element_text(size = 9), legend.position= "bottom", axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+***Sum of Monthly Contribution Receipt Amount for Top 5 Candidates (Year 2015 and 2016)***
+
+```{r sum_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt,fig.width=15,echo=FALSE,echo=FALSE}
+ny.sum_contbr_receipt_amt_by_cand_nm_and_receipt_dt <- ny_subset_top5_cand_nm_by_amt %>%
+   group_by(cand_nm, contb_receipt_year, contb_receipt_month) %>%
+   summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+             mean = mean(contb_receipt_amt), 
+             max = max(contb_receipt_amt),
+             min = min(contb_receipt_amt),
+             median = median(contb_receipt_amt)) %>%
+   mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+   ungroup() %>%
+   arrange(desc(sum_amt))
+
+ ny.sum_contbr_receipt_amt_by_cand_nm_and_receipt_dt
+ 
+
+ ny.sum_contbr_receipt_amt_by_cand_party_and_receipt_dt <- ny %>% 
+   filter(cand_party %in% c("Republican", "Democratic")) %>% 
+   group_by(cand_party, contb_receipt_year, contb_receipt_month) %>%
+   summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+             mean = mean(contb_receipt_amt),
+             max = max(contb_receipt_amt),
+             min = min(contb_receipt_amt), 
+             median = median(contb_receipt_amt)) %>%
+   mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+   ungroup() %>%
+   arrange(desc(sum_amt))
+ 
+ny.sum_contbr_receipt_amt_by_cand_party_and_receipt_dt
+
+
+ny.sum_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt <- ny_subset_top5_cand_nm_by_amt %>% 
+  filter(cand_party %in% c("Republican", "Democratic")) %>% 
+  group_by(cand_party, cand_nm, contb_receipt_year, contb_receipt_month) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt),
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt), 
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+  ungroup() %>%
+  arrange(desc(sum_amt))
+
+
+ny.sum_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt
+
+
+  
+ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016),
+       aes(x = contb_receipt_month, y = sum_amt/1000000)) + 
+  geom_bar(stat = "identity", aes(fill = cand_nm, 
+                                  colour = cand_party,
+                                  group = cand_party), size = 0.75) +
+  geom_line(aes(colour = cand_party, group = cand_party,
+                linetype = cand_party),  size = 0.5) +
+  facet_wrap(~contb_receipt_year, ncol = 1) + 
+  scale_fill_discrete(name="Top 5 Candidate Name") +
+  scale_color_manual(values=c("blue", "red"), name="Party Affiliation") +
+  labs(title = c('Sum of Contribution Amount by Month'),
+       x = c("Month"), y = c('Sum of Contribution Amount (in 1000000s)')) + 
+  theme(text = element_text(size = 12), strip.text = element_text(size = 12), title = element_text(size = 14), axis.text = element_text(size = 14), legend.text = element_text(size = 10), legend.position= "bottom", 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_nm_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016),
+       aes(x = contb_receipt_month, y = sum_amt/1000000, fill = cand_nm)) + 
+   geom_bar(stat = "identity", aes(fill = cand_nm)) + 
+   facet_wrap(~contb_receipt_year, ncol = 1, scales = 'free') + 
+   scale_fill_discrete(name="Top 5 Party Affiliation") +
+   labs(title = c('Sum of Contribution Amount by Month'),
+        x = c("Month"), y = c('Sum of Contribution Amount (in 1000000s)')) + 
+   theme(text = element_text(size = 12), strip.text = element_text(size = 12), title = element_text(size =14), axis.text = element_text(size = 14), legend.text = element_text(size = 9), legend.position= "bottom",
+         axis.text.x = element_text(angle = 90, hjust = 1))
+ 
+
+
+ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_party_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016), 
+        aes(x = contb_receipt_month, y = sum_amt/1000000, fill = cand_party)) +
+   geom_bar(stat = "identity", aes(fill = cand_party)) + 
+   facet_wrap(~contb_receipt_year, ncol = 1, scales = 'free') + 
+   scale_fill_discrete(name="Party Affiliation") +
+   labs(title = c('Sum of Contribution Amount by Month'),
+        x = c("Month"), y = c('Sum of Contribution Amount (in 1000000s)')) + 
+   theme(text = element_text(size = 14), strip.text = element_text(size = 14), title = element_text(size = 14), axis.text = element_text(size = 14), legend.text = element_text(size = 9), legend.position= "bottom",
+         axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+***_Count of Monthly Contribution Receipt Amount for Top 5 Candidates (Year 2015 and 2016)_***
+
+```{r count_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt,fig.width=15,echo=FALSE}
+
+ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016), 
+       aes(x = contb_receipt_month, y = n)) + 
+  geom_bar(stat = "identity",
+           aes(fill = cand_nm, 
+               colour = cand_party,
+               group = cand_party),
+           size = 1.0) +
+  geom_line(aes(  colour = cand_party,
+                 group = cand_party, linetype = cand_party),  size = 0.75) +
+  facet_wrap(~contb_receipt_year, ncol = 1) + 
+  scale_fill_discrete(name="Top 5 Candidate Name") +
+  scale_color_manual(values=c("blue", "red"), name="Party Affiliation") +
+  labs(title = c('Count by Month'), x = c("Month"), y = c('Count')) + 
+  theme(text = element_text(size = 12), strip.text = element_text(size = 12), title = element_text(size = 9), axis.text = element_text(size = 12), legend.text = element_text(size = 12), legend.position= "bottom",
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+
+***Sum of Monthly Contribution Receipt Amount for Top 10 Contributor Cities (Year 2015 and 2016)***
+
+
+```{r sum_contb_receipt_amt_by_top10_contbr_city_and_receipt_dt,fig.hight=15,echo=FALSE}
+
+ny.sum_contb_receipt_amt_by_top10_contbr_city_and_receipt_dt <- ny_subset_top10_city_by_amt %>%
+  group_by(contbr_city, contb_receipt_year, contb_receipt_month) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt), 
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt), 
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+  ungroup() %>%
+  arrange(desc(sum_amt))
+
+ny.sum_contb_receipt_amt_by_top10_contbr_city_and_receipt_dt
+
+ggplot(data = subset(ny.sum_contb_receipt_amt_by_top10_contbr_city_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016), 
+       aes(x = contb_receipt_month, y = sum_amt/1000000)) + 
+  geom_bar(stat = "identity", aes(fill = contbr_city)) + 
+  facet_wrap(~contb_receipt_year, ncol = 1) + 
+  scale_fill_discrete(name="Top 10 Contributor Cities") +
+  labs(title = c('Sum of Contribution Amount by Month'), x = c("Month"), y = c('Sum of Contribution Amount (in 1000000s)')) + 
+  theme(text = element_text(size = 12), strip.text = element_text(size = 12), title = element_text(size = 12), axis.text = element_text(size = 12), legend.text = element_text(size = 7), legend.position= "bottom", axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+### Sum of Contribution Receipt Amount by Top 20 City for Top 5 Candidates  
+
+
+```{r contb_receipt_amt_by_top20_contbr_city_and_top5_cand_nm,fig.hight=15,echo=FALSE}
+
+ny.contb_receipt_amt_by_top20_contbr_city_and_top5_cand_nm <- ny_subset_top20_city_top5_cand_nm %>%
+  group_by(contbr_city, cand_nm) %>%
+  summarise(n=n(), sum_amt = sum(contb_receipt_amt),
+            mean = mean(contb_receipt_amt),
+            max = max(contb_receipt_amt),
+            min = min(contb_receipt_amt),
+            median = median(contb_receipt_amt)) %>%
+  mutate(count_proportion = n / sum(n), sum_proportion = sum_amt / sum(sum_amt)) %>%
+  ungroup() %>%
+  arrange(desc(n)) 
+ny.contb_receipt_amt_by_top20_contbr_city_and_top5_cand_nm
+
+ggplot(ny.contb_receipt_amt_by_top20_contbr_city_and_top5_cand_nm,
+       aes(x = reorder(contbr_city, -sum_amt), y = sum_amt/1000000, 
+           fill = cand_nm)) + 
+  geom_bar(stat = "identity") +
+  scale_y_log10() +
+  scale_fill_discrete(name="Top 5 Candidate Name") +
+   labs(title = c('Log10(Contribution Count) by Top 20 City'), x = c("City"), y = c('Log10(Contribution Count)')) + 
+  labs(title = c('Sum of Contribution Amount by Top 20 Cities and Top 5 Candidate'), x = c("Top 20 City"), y = c('Sum of Contribution Amount (in 1000000s)')) + 
+  theme(text = element_text(size = 12), strip.text = element_text(size = 12), title = element_text(size = 12), axis.text = element_text(size = 7), legend.text = element_text(size = 7), legend.position= "bottom", axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## _Multivariate Analyis_   
+___
+**1.  Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?**    
+
+>The monthly sum of contribution amount by party affiliation shows NEW YORK is a bi-partisan state with significantly leaning towards blue.  In most months, majority of contribution amount goes to the Democratic party.  Only in June 2015, after Trump's announcement for running, on , the Republican party is getting higher contribution amount that month. 
+
+>In terms of monthly sum of contribution amount not shows NEW YORK's political party preference, it also shows NEW YORK had strong and consistent support for Clinton most months except for April 2016.  This however doesn't mean Sanders lack supporters.  The monthly contribution count shows Sanders had always received higher counts of contributions, although in smaller amount in comparison to Clinton's, until he dropped out in June 2016.  
+
+
+**2.  Were there any interesting or surprising interactions between features?**    
+
+>The count of contribution isn't always directly representative of the sum of contribution received.  Comparing Sanders' and Clinton's, Sanders receive higher counts of contributions, but Clinton's supporters contribute in higher amount.  That leads to Clinton's yield higher sum. Clinton's contributions amount 145,248,693 dolar  while Sanders receive 8,049,475 dolar  
+
+>The monthly sum of contribution amount for each candidate also contribute to the monthly sum of contribution amount for the party affiliation those candidates represent respectively.  
+
+**3.  OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.**    
+>No, I didn't create models with the dataset because most data are of factor/categorical data. also to make modele for prediction we need data for number of votes in states or  Contributor's Employer and Contributor's Occupation where most of data NONE OR N/A and data like that 
+
+
+
+## _Final Plots and Summary_
+___
+
+
+***_Plot One_***
+
+
+```{r final_plot1,fig.width=15,echo=FALSE}
+
+ggp1k_final <- ggplot(aes(x = reorder(cand_nm, -n), y = n),
+                      data = subset(ny.count_by_cand_nm, n >= 1000)) +
+  geom_bar(stat="identity",color = I('black'),fill = I('#F79420')) +
+  scale_y_log10() +
+  xlab('') +
+  ylab('Log10(Contribution Count)') +
+  theme_minimal() +
+  theme(text = element_text(size = 14), strip.text = element_text(size = 14), title = element_text(size = 14), axis.text = element_text(size = 14), legend.text = element_text(size = 10),  axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggp1k <- ggp1k_final + geom_hline(aes(yintercept=10000), colour="#BB0000", linetype="dashed")
+
+
+ggp10k_final <- ggplot(aes(x = reorder(cand_nm, -n), y = n),
+                       data = subset(ny.count_by_cand_nm, n >= 10000)) +
+  geom_bar(stat="identity", color = I('black'),fill = I('#099009')) + 
+  scale_y_log10() +
+  xlab('Candidate Name') +
+  ylab('') +
+  theme(text = element_text(size = 14), strip.text = element_text(size = 14), title = element_text(size = 14), axis.text = element_text(size = 14), legend.text = element_text(size = 10),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+ggp10k <- ggp10k_final + geom_hline(aes(yintercept=100000), colour="#BB0000", linetype="dashed")
+
+
+
+ggp100k_final <- ggplot(aes(x = reorder(cand_nm, -n), y = n),
+                        data = subset(ny.count_by_cand_nm, n >= 100000)) +
+  geom_bar(stat="identity",color = I('black'),fill = 'blue') + 
+  scale_y_log10() +
+  xlab('') +
+  ylab('') +
+  theme(text = element_text(size = 14), strip.text = element_text(size = 14), title = element_text(size = 14), axis.text = element_text(size = 14), legend.text = element_text(size = 10),  axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_blank())
+
+ggp100k <- ggp100k_final+geom_hline(aes(yintercept=100000), colour="#BB0000", linetype="dashed")
+
+grid.arrange(ggp1k, ggp10k, ggp100k, ncol=3)
+
+```
+
+
+
+***_Plot Two_***
+___
+
+
+```{r final_plot2,fig.height=15,echo=FALSE}
+ggp_sum_by_top5_cand_nm_final <- ggplot(ny.sum_contb_receipt_amt_by_cand_nm[1:5,],
+                                        aes(x = reorder(cand_nm, -sum_amt),
+                                            y = sum_amt/1000000))+ 
+  geom_bar(stat = "identity", aes(fill=cand_nm)) +
+  labs(title = c('Sum of Contribution Amount by Candidate Name'), x = c("Candidate Name"), y = c('Sum of Contribution Amount (in 1000000s)')) +
+  scale_fill_manual(values=c("#1874cd", "#fe8181", "#fe5757", "#1e90ff", "#fe2e2e"), name="Top 5 Candidate Name") +
+  theme(text = element_text(size = 12), strip.text = element_text(size = 12), title = element_text(size = 12), axis.text = element_text(size = 12), legend.position= "none", legend.text = element_text(size = 9), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+# ggp_sum_by_cand_nm
+ 
+ggp_dist_by_top5_cand_final <- ggplot(ny_subset_top5_cand_nm_by_amt,
+                                      aes(x = ordered(cand_nm, 
+                                                      levels = c("Clinton, Hillary Rodham", "Sanders, Bernard", "Trump, Donald J.", "Cruz, Rafael Edward 'Ted'", "Rubio, Marco")), y = contb_receipt_amt)) +
+  geom_boxplot(aes(fill=cand_nm)) +
+  stat_summary(fun.y = "mean", geom = "point", 
+               shape= 23, size= 5, fill = 'red') +
+  coord_cartesian(ylim = c(-300, 750)) +
+  labs(title = c('Contribution Amount by Top 5 Candidates'), x = c("Candidate Name"), y = c('Contribution Amount')) +
+  scale_fill_manual(values=c("#1874cd", "#fe8181", "#fe5757", 
+                             "#1e90ff", "#fe2e2e"), 
+                    name="Top 5 Candidate Name") +
+  theme(text = element_text(size = 12), 
+        strip.text = element_text(size = 12),
+        title = element_text(size = 12),
+        axis.text = element_text(size = 12), 
+        legend.position= "bottom",
+        legend.text = element_text(size = 9),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+ 
+ 
+ggp_sum_by_cand_party_final <- ggplot(ny.sum_contb_receipt_amt_by_cand_party, aes(x = reorder(cand_party, -sum_amt),  y = sum_amt/1000000)) +
+  geom_bar(stat = "identity", aes(fill=cand_party)) +
+  labs(title = c('Sum of Contribution Amount by Party Affiliation'),
+       x = c("Candidate Party Affiliation"), 
+       y = c('Sum of Contribution Amount (in 1000000s)')) +
+  scale_color_manual(name="Party Affiliation", values=c("blue", "green", "purple", "gold", "red")) +
+  scale_fill_manual(name="Party Affiliation", 
+                    values=c("blue", "green", "purple", "gold", "red")) + 
+  theme(text = element_text(size = 12),
+        strip.text = element_text(size = 12),
+        title = element_text(size = 12),
+        axis.text = element_text(size = 12), 
+        legend.position= "none", 
+        legend.text = element_text(size = 9), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggp_dist_by_cand_party_final <- ggplot(ny, aes(x = ordered(cand_party,
+                                                           levels = c("Democratic", "Republican", "Green", "Libertarian", "Independent")),
+                                               y = contb_receipt_amt)) +
+  geom_boxplot(aes(fill=cand_party)) +
+  stat_summary(fun.y = "mean", geom = "point", shape= 23, size= 5,
+               fill = 'red') +
+  coord_cartesian(ylim = c(-300, 600)) +
+  labs(title = c('Contribution Amount by Party Affiliation'),
+       x = c("Candidate Party Affiliation"),
+       y = c('Contribution Amount')) +
+  scale_color_manual(name="Party Affiliation",
+                     values=c("blue", "green", "purple", "gold", "red")) +
+  scale_fill_manual(name="Party Affiliation",
+                    values=c("blue", "green", "purple", "gold", "red")) +
+  theme(text = element_text(size = 12),
+        strip.text = element_text(size = 12), 
+        title = element_text(size = 12), 
+        axis.text = element_text(size = 12),
+        legend.position= "bottom", 
+        legend.text = element_text(size = 9),
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+grid.arrange( ggp_dist_by_cand_party_final, ggp_dist_by_top5_cand_final)
+
+
+grid.arrange(ggp_sum_by_cand_party_final, ggp_sum_by_top5_cand_nm_final) 
+
+```
+
+
+```{r,echo=FALSE}
+ny.sum_contb_receipt_amt_by_cand_nm
+```
+
+
+***Description Two***   
+
+
+>New york shows strong support for the Democratic party.  Between the two democratic candidates Clinton and Sanders, contributions to Clinton are of wider range, and higher mean and median value; where as to Sanders are narrower and lower mean and median value.  
+
+***Plot Three***
+
+___
+
+
+```{r final_plot3,fig.width=15,echo=FALSE}
+
+ggp_sum_by_cand_party_cand_nm <- ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016),
+                                        aes(x = contb_receipt_month, 
+                                            y = sum_amt/1000000)) + 
+  geom_bar(stat = "identity", aes(fill = cand_nm, colour = cand_party, 
+                                  group = cand_party), size = 0.75) + 
+   geom_line(aes(  colour = cand_party, group = cand_party, linetype = cand_party),  size = 0.5) +
+  facet_wrap(~contb_receipt_year, ncol = 1) + 
+  scale_fill_manual(values=c("#1874cd", "#fe8181", "#fe5757", "#1e90ff", "#fe2e2e"), name="Top 5 Candidate Name") +
+  scale_color_manual(values=c("blue", "red"), name="Party Affiliation") +
+  labs(title = c('Sum of Contribution Amount by Month'), x = c("Month"), y = c('Sum of Contribution Amount (in 1000000s)')) + 
+  theme(text = element_text(size = 11), strip.text = element_text(size = 11), title = element_text(size = 11), axis.text = element_text(size = 11), legend.text = element_text(size = 5), legend.position= "bottom", axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggp_count_by_cand_party_cand_nm <- ggplot(data = subset(ny.sum_contbr_receipt_amt_by_cand_party_top5_cand_nm_and_receipt_dt, contb_receipt_year == 2015 | contb_receipt_year == 2016), 
+                                          aes(x = contb_receipt_month, y = n)) + 
+  geom_bar(stat = "identity", aes(fill = cand_nm, 
+                                  colour = cand_party, 
+                                  group = cand_party), size = 0.75) + 
+   geom_line(aes(colour = cand_party, group = cand_party, 
+                 linetype = cand_party),  size = 0.5) +
+  facet_wrap(~contb_receipt_year, ncol = 1) + 
+  scale_fill_manual(values=c("#1874cd", "#fe8181", "#fe5757", "#1e90ff", "#fe2e2e"), name="Top 5 Candidate Name") +
+  scale_color_manual(values=c("blue", "red"), name="Party Affiliation") +
+  labs(title = c('Count by Month'), x = c("Month"), y = c('Count')) + 
+  theme(text = element_text(size = 11), strip.text = element_text(size = 11), title = element_text(size = 11), axis.text = element_text(size = 11), legend.text = element_text(size = 5), legend.position="bottom", axis.text.x = element_text(angle = 90, hjust = 1))
+
+#grid.arrange(ggp_count_by_cand_party_cand_nm, ggp_sum_by_cand_party_cand_nm, ncol = 1)
+ggp_count_by_cand_party_cand_nm
+
+ggp_sum_by_cand_party_cand_nm
+
+```
+
+*Description Three*   
+
+>Sanders has always had higher counts of contributions until he dropped out in June 2016, where as Clinton has mostly had higher sum of contribution amount.      
+
+
+
+## Reflection:
+
+>The 2016 Presidential Campaign Contribution dataset for New york State contains 649640 records of contributions and 18 variables.  Most of the variables are of factor / categorical type, except for contribution receipt date `contb_receipt_dt` and contribution receipt amount `contb_receipt_amt`. I started by understanding the individual variables in the data set, and then I explored interesting questions and leads as I continued to make observations on plots. Eventually, I explored the count of contributions, sum of contribution amount across the selected variables and across timeline up till the end of 2016.  
+
+>Individual candidate, and candidate party affiliation are definitely strong attributes to contribution amount and the sum of it.  The count of contribution is highly correlated to the sum of contribution amount, but there one isn't necessary a good prediction of the other.  The count of contributions, sum of contribution amount, by candidate and/or candidate party affiliation, definitely showed event driven trends when observed on the monthly plots over 2015 and 2016.  
+
+There are also quite some limitations on this dataset:     
+
+- not a whole lot of statistical analysis can be done given most of the variables are factor type     
+- data validity was not ensured    
+- missing data and possibly fake data on `contbr_employer`.  The 'N/A', 'NONE', `is.na`, 'INFORMATION REQUESTED'It could be possible that contributors are hesitant to provide `contbr_employer` information.          
+- also possibly missing data and fake data on `contbr_occupation`.  Notably, the top two `contbr_occupation` are 'RETIRED' and 'NOT EMPLOYED'.  _Why is it that these two groups, who are unlikely to have an income source, are contributing more often than others?_      
+- duplicate yet inconsistent data between `contbr_employer` and `contbr_occupation`.   Even though values such as 'RETIRED', 'SELF-EMPLOYED', 'NOT EMPLOYED' and 'SELF-EMPLOYED' are found in both `contbr_employer` and `contbr_occupation`, the count of those values are somehow different.  While the top 20 `contbr_employer` were made up by those ambiguous values, the top 20 `contbr_occupation` are clearly identified.  _Contributors are more willing to disclose occupation information but not employer information. _       
+- untidy data and large set of distinct values in `contbr_city` and `contbr_zip` variable. 
+
+
+
+## References:
+- http://stackoverflow.com/questions/8854046/duplicate-row-names-are-not-allowed-error-in-r-programming/34884041#34884041
+- http://www.fec.gov/finance/disclosure/ftpdet.shtml
+- http://www.fec.gov/finance/disclosure/metadata/DataDictionaryContributionstoCandidates.shtml
+- http://www.fec.gov/finance/disclosure/metadata/DataDictionaryContributionsbyIndividuals.shtml
+- http://www.fec.gov/finance/disclosure/metadata/DataDictionaryWEBL.shtml
+- http://www.fec.gov/finance/disclosure/metadata/DataDictionaryWEBALL.shtml
+- http://www.fec.gov/finance/disclosure/metadata/DataDictionaryOperatingExpenditures.shtml 
+- http://zevross.com/blog/2014/08/04/beautiful-plotting-in-r-a-ggplot2-cheatsheet-3/
+- http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/
+- http://www.cookbook-r.com/Graphs/Plotting_distributions_(ggplot2)/
+- http://docs.ggplot2.org/current/index.html
+- 
+
